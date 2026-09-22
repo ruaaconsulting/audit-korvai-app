@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>IEM-PM Audit Report — {{ audit.audit_id }}</title>
+    <style>
+        :root {
+            --primary: #c41e3a;
+            --primary-light: #f8e8eb;
+            --dark: #1a1a1a;
+            --gray: #666;
+            --light-gray: #f5f5f5;
+            --border: #ddd;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            color: var(--dark);
+        }
+        h1 {
+            border-bottom: 3px solid var(--primary);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        h2 {
+            color: var(--primary);
+            margin-top: 2.5rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.3rem;
+            font-size: 1.4rem;
+        }
+        h3 {
+            color: #333;
+            margin-top: 1.5rem;
+            font-size: 1.1rem;
+        }
+        .meta {
+            background: var(--light-gray);
+            padding: 1rem;
+            border-radius: 6px;
+            margin: 1rem 0;
+            font-size: 0.95rem;
+        }
+        .metric-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        .metric {
+            background: #fff;
+            border: 1px solid var(--border);
+            padding: 1rem 1.5rem;
+            border-radius: 6px;
+            min-width: 150px;
+            flex: 1;
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--primary);
+        }
+        .metric-label {
+            font-size: 0.8rem;
+            color: var(--gray);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .finding {
+            background: var(--light-gray);
+            border-left: 4px solid var(--primary);
+            padding: 1.2rem;
+            margin: 1.2rem 0;
+            border-radius: 0 6px 6px 0;
+        }
+        .finding-id {
+            font-weight: bold;
+            color: var(--primary);
+            font-size: 1.1rem;
+        }
+        .gap-type {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .severity-1 { border-left-color: #28a745; }
+        .severity-2 { border-left-color: #6c757d; }
+        .severity-3 { border-left-color: #ffc107; }
+        .severity-4 { border-left-color: #fd7e14; }
+        .severity-5 { border-left-color: #dc3545; }
+        .evidence {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            padding: 0.8rem;
+            margin: 0.5rem 0;
+            border-radius: 4px;
+            font-family: "SF Mono", Monaco, monospace;
+            font-size: 0.88rem;
+            line-height: 1.5;
+        }
+        .section { margin-bottom: 3rem; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            font-size: 0.95rem;
+        }
+        th, td {
+            text-align: left;
+            padding: 0.7rem;
+            border-bottom: 1px solid var(--border);
+        }
+        th {
+            background: var(--light-gray);
+            font-weight: 600;
+        }
+        .narrative {
+            font-style: italic;
+            color: #444;
+            line-height: 1.8;
+            padding: 0.5rem 0;
+        }
+        .footer {
+            margin-top: 4rem;
+            padding-top: 2rem;
+            border-top: 2px solid #eee;
+            color: var(--gray);
+            font-size: 0.9rem;
+            text-align: center;
+        }
+        .action-list {
+            padding-left: 1.2rem;
+        }
+        .action-list li {
+            margin: 0.6rem 0;
+            line-height: 1.5;
+        }
+        .highlight {
+            background: var(--primary-light);
+            padding: 0.1rem 0.3rem;
+            border-radius: 3px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+<h1>IEM-PM PMO Data Gap Audit Report</h1>
+
+<div class="meta">
+    <strong>Audit ID:</strong> {{ audit.audit_id }} &nbsp;|&nbsp;
+    <strong>Charter:</strong> {{ audit.charter_version }} &nbsp;|&nbsp;
+    <strong>Generated:</strong> {{ generated_at }} &nbsp;|&nbsp;
+    <strong>Schema:</strong> {{ audit.schema_version }} &nbsp;|&nbsp;
+    <strong>Skill Version:</strong> {{ audit.skill_version or "unknown" }} &nbsp;|&nbsp;
+    <strong>Model:</strong> {{ audit.model or "unknown" }}
+</div>
+
+<!-- 1. Executive Summary -->
+<div class="section">
+    <h2>1. Executive Summary</h2>
+    <div class="metric-grid">
+        <div class="metric">
+            <div class="metric-value">{{ findings_count }}</div>
+            <div class="metric-label">Total Findings</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value">{{ audit.reporting_integrity_score.score }}</div>
+            <div class="metric-label">Integrity Score / 100</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value">{{ artifact_count }}</div>
+            <div class="metric-label">Artifacts Examined</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value">{{ audit.baseline.standards_declared | length }}</div>
+            <div class="metric-label">Standards Declared</div>
+        </div>
+    </div>
+    <p>This audit compared observed delivery evidence against the declared baseline of
+    <strong>{{ audit.baseline.standards_declared | join(", ") }}</strong>.
+    The analysis identified <strong>{{ findings_count }}</strong> evidence-based gaps classified across
+    seven gap types and traced to seven root origins.</p>
+</div>
+
+<!-- 2. Audit Scope -->
+<div class="section">
+    <h2>2. Audit Scope & Baseline</h2>
+    <h3>Declared Standards</h3>
+    <ul>
+        {% for s in audit.baseline.standards_declared %}
+        <li>{{ s }}</li>
+        {% endfor %}
+    </ul>
+
+    <h3>Artifacts Examined</h3>
+    <table>
+        <tr>
+            <th>Artifact ID</th>
+            <th>Name</th>
+            <th>Source</th>
+            <th>Checksum</th>
+        </tr>
+        {% for a in audit.baseline.artifacts_examined %}
+        <tr>
+            <td>{{ a.artifact_id }}</td>
+            <td>{{ a.artifact_name }}</td>
+            <td>{{ a.source_path }}</td>
+            <td><code>{{ a.checksum[:16] }}...</code></td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <h3>Scope</h3>
+    <p>{{ audit.baseline.scope | join(", ") }}</p>
+</div>
+
+<!-- 3. Delivery Evidence -->
+<div class="section">
+    <h2>3. Delivery Evidence Summary</h2>
+    <p>Total artifacts examined: <strong>{{ audit.evidence_summary.total_artifacts }}</strong>.
+    Field mapping coverage: <strong>{{ audit.evidence_summary.coverage_percentage }}%</strong>.</p>
+</div>
+
+<!-- 4. Gap Register -->
+<div class="section">
+    <h2>4. Gap Register</h2>
+    {% for f in audit.findings %}
+    <div class="finding severity-{{ f.severity }}">
+        <span class="finding-id">{{ f.id }}</span>
+        <span class="gap-type">{{ f.gap_type }}</span>
+        <span style="float:right; color: var(--gray); font-weight: 600;">Severity: {{ f.severity }}/5</span>
+
+        <h4>{{ f.standard_reference.standard }} {{ f.standard_reference.identifier }}</h4>
+        <p><strong>Description:</strong> {{ f.description }}</p>
+
+        <p><strong>Root Origin:</strong> <span class="highlight">{{ f.root_origin }}</span></p>
+        <p><strong>Impact:</strong> {{ f.impact }}</p>
+        {% if f.human_approved is not none %}
+        <p><strong>Human Approval:</strong>
+            {% if f.human_approved %}<span style="color:#28a745;">Approved by {{ f.human_approved_by or "unrecorded" }}{% if f.human_approved_at %} on {{ f.human_approved_at }}{% endif %}</span>
+            {% else %}<span style="color:#dc3545;">Pending Review</span>{% endif %}
+        </p>
+        {% elif f.severity >= 4 %}
+        <p><strong>Human Approval:</strong> <span style="color:#dc3545;">NOT RECORDED (required for this severity)</span></p>
+        {% endif %}
+
+        <h4>Evidence</h4>
+        {% for ev in f.evidence %}
+        <div class="evidence">
+            <strong>{{ ev.artifact_id }}</strong> @ {{ ev.location }}<br>
+            {{ ev.quote_or_absence }}
+        </div>
+        {% endfor %}
+
+        <p><strong>Recommended Action:</strong> {{ f.recommended_action }}</p>
+        {% if f.intelligence_dimensions %}
+        <p style="font-size: 0.9rem; color: var(--gray);">
+            <em>Affects: {{ f.intelligence_dimensions | join(", ") }}</em>
+        </p>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+
+<!-- 5. Root Cause Analysis -->
+<div class="section">
+    <h2>5. Root Cause Analysis</h2>
+    <table>
+        <tr>
+            <th>Root Origin</th>
+            <th>Count</th>
+            <th>% of Findings</th>
+        </tr>
+        {% for origin, count in origin_counts.items() %}
+        <tr>
+            <td>{{ origin }}</td>
+            <td>{{ count }}</td>
+            <td>{{ "%.1f" | format((count / findings_count * 100) if findings_count > 0 else 0) }}%</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+<!-- 6. Intelligence Indicators -->
+<div class="section">
+    <h2>6. Intelligence Indicators (Narrative Diagnostics)</h2>
+    {% for dim, text in audit.intelligence_indicators.items() %}
+    <p class="narrative">
+        <strong>{{ dim.replace('_', ' ').title() }}:</strong> {{ text }}
+    </p>
+    {% endfor %}
+</div>
+
+<!-- 7. Reporting Integrity Score -->
+<div class="section">
+    <h2>7. Reporting Integrity Score</h2>
+    <div class="metric-grid">
+        <div class="metric">
+            <div class="metric-value">{{ audit.reporting_integrity_score.score }}</div>
+            <div class="metric-label">Score / 100</div>
+        </div>
+    </div>
+    <p><strong>Methodology:</strong> {{ audit.reporting_integrity_score.methodology }}
+    ({{ audit.reporting_integrity_score.version }})</p>
+    <p>This score is computed deterministically from gap density, severity distribution,
+    root cause diversity, and Missing gap penalties. It is not subjective.</p>
+
+    {% if ris_components %}
+    <h4>Score Components</h4>
+    <table>
+        <tr><th>Component</th><th>Value</th></tr>
+        {% for key, val in ris_components.items() %}
+        <tr><td>{{ key.replace('_', ' ').title() }}</td><td>{{ val }}</td></tr>
+        {% endfor %}
+    </table>
+    {% endif %}
+
+    {% if ris_limitations %}
+    <h4>Limitations</h4>
+    <ul>
+        {% for lim in ris_limitations %}
+        <li>{{ lim }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <h4>Severity Distribution</h4>
+    <table>
+        <tr>
+            <th>Severity 1</th>
+            <th>Severity 2</th>
+            <th>Severity 3</th>
+            <th>Severity 4</th>
+            <th>Severity 5</th>
+        </tr>
+        <tr>
+            <td>{{ severity_counts.get(1, 0) }}</td>
+            <td>{{ severity_counts.get(2, 0) }}</td>
+            <td>{{ severity_counts.get(3, 0) }}</td>
+            <td>{{ severity_counts.get(4, 0) }}</td>
+            <td>{{ severity_counts.get(5, 0) }}</td>
+        </tr>
+    </table>
+</div>
+
+<!-- 8. Recommended Actions -->
+<div class="section">
+    <h2>8. Recommended Actions</h2>
+    <ol class="action-list">
+        {% for f in audit.findings %}
+        <li>
+            <strong>{{ f.id }}:</strong> {{ f.recommended_action }}
+            <br><em style="color: var(--gray);">Addresses {{ f.root_origin }} origin</em>
+        </li>
+        {% endfor %}
+    </ol>
+</div>
+
+<!-- 9. Roadmap -->
+<div class="section">
+    <h2>9. Roadmap</h2>
+    <p>Prioritize remediation by root origin frequency and severity concentration:</p>
+    <ol class="action-list">
+        <li>Address highest-frequency root origin first</li>
+        <li>Resolve all Severity 5 gaps within 30 days</li>
+        <li>Close Missing gaps by updating Charter or capturing data</li>
+        <li>Re-run audit after remediation to measure delta</li>
+    </ol>
+</div>
+
+<!-- 10. Appendix -->
+<div class="section">
+    <h2>10. Appendix</h2>
+    <table>
+        <tr><th>Item</th><th>Value</th></tr>
+        <tr><td>Schema Version</td><td>{{ audit.schema_version }}</td></tr>
+        <tr><td>Canonical JSON</td><td><code>findings.json</code></td></tr>
+        <tr><td>Audit Manifest</td><td><code>audit_manifest.md</code></td></tr>
+        <tr><td>Charter Version</td><td>{{ audit.charter_version }}</td></tr>
+        <tr><td>Skill Version</td><td>{{ audit.skill_version or "unknown" }}</td></tr>
+        <tr><td>Model</td><td>{{ audit.model or "unknown" }}</td></tr>
+    </table>
+</div>
+
+<div class="footer">
+    <p>IEM-PM Intelligence Engine | Local-First Audit | Read-Only Analysis</p>
+    <p>Generated: {{ generated_at }}</p>
+</div>
+
+</body>
+</html>

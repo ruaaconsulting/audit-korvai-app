@@ -1,0 +1,68 @@
+{
+  "audit_id": "IEM-20260726-ABC123",
+  "schema_version": "1.1.0",
+  "charter_version": "v1.0.0",
+  "generated_at": "2026-07-26T11:19:00-05:00",
+  "baseline": {
+    "standards_declared": ["PMBOK 8th Edition", "Org-PMM-v2.3"],
+    "artifacts_examined": [
+      {
+        "artifact_id": "ART-001",
+        "artifact_name": "Project Schedule",
+        "source_path": "/data/schedules/schedule.mpp",
+        "checksum": "a1b2c3d4e5f6"
+      },
+      {
+        "artifact_id": "ART-002",
+        "artifact_name": "RAID Log",
+        "source_path": "/data/raid/raid.xlsx",
+        "checksum": "b2c3d4e5f6g7"
+      }
+    ],
+    "scope": ["Projects", "Programs"]
+  },
+  "evidence_summary": {
+    "total_artifacts": 2,
+    "total_fields_mapped": 25,
+    "coverage_percentage": 89.3
+  },
+  "findings": [
+    {
+      "id": "FIND-0001",
+      "gap_type": "Missing",
+      "root_origin": "Capture",
+      "description": "The project schedule contains no baseline_start or baseline_finish fields despite the Charter defining them as required.",
+      "evidence": [
+        {
+          "artifact_id": "ART-001",
+          "location": "Sheet1, Column D, all 47 rows",
+          "quote_or_absence": "Field 'baseline_start' is null across all rows"
+        }
+      ],
+      "standard_reference": {
+        "standard": "PMBOK 8th Edition",
+        "clause": "6.4.2.3",
+        "identifier": "Process 6.4",
+        "summary": "A schedule baseline must be established and approved"
+      },
+      "severity": 4,
+      "impact": "Inability to measure schedule variance prevents accurate forecasting",
+      "recommended_action": "Establish and approve schedule baseline before next reporting period",
+      "intelligence_dimensions": ["Predictability", "Visibility"]
+    }
+  ],
+  "intelligence_indicators": {
+    "visibility": "Project status is partially visible but baseline absence creates blind spots for variance tracking.",
+    "integrity": "Schedule data exists but cannot be trusted for performance measurement without baseline.",
+    "connectivity": "No significant connectivity issues observed.",
+    "governance": "Governance packs are produced but lack baseline approval evidence.",
+    "predictability": "Severely degraded due to missing baseline — forecast accuracy is unmeasurable.",
+    "decision_quality": "Decisions are made without earned value data, reducing evidence basis.",
+    "continuous_improvement": "No evidence of lessons learned feeding into schedule planning."
+  },
+  "reporting_integrity_score": {
+    "score": 72.5,
+    "methodology": "Weighted Gap Profile v1.0.0",
+    "version": "1.0.0"
+  }
+}
