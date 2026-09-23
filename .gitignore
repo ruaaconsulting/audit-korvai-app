@@ -13,3 +13,5 @@ registries/
 
 # Generated output (reports, findings.json) - derived artifacts, not source
 audit_engine/output/
+
+docs/

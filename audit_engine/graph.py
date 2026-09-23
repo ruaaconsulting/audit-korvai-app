@@ -1,5 +1,5 @@
 """
- audit_engine/graph.py
+audit_engine/graph.py
 
 Audit engine ports one node from graph , ported from state.py. this is the real engine that runs the whole application
 
@@ -55,7 +55,8 @@ def baseline_node(state: AuditState) -> dict:
         json.dumps({
             "documents": list(fingerprints.keys()), 
             "fingerprints": fingerprints,
-            "skipped": skipped
+            "skipped": skipped,
+            "skeletons": skeletons 
         }, indent=2),
         encoding="utf-8"
     )

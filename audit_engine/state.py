@@ -109,6 +109,12 @@ class MaterialityScope(BaseModel):
     field_completeness_threshold_pct: Optional[float] = Field(None, ge=0.0, le=100.0)
     max_artifact_age_days: Optional[int] = None
 
+class RegistryItem(BaseModel):
+    criterion_id: str
+    standard: str
+    clause: Optional[str] = None
+    paraphrase: str
+    expected_evidence: str
 
 # ==============================================================================
 # 3. CANONICAL FINDINGS MODELS (Output State)
@@ -341,6 +347,8 @@ class AuditState(BaseModel):
     evidence_summary: Optional[EvidenceSummary] = None
 
     # --- Filled by classify / trace / score / synthesize nodes ---
+    registry: List[RegistryItem] = Field(default_factory=list)
+    chartered_artifact_ids: List[str] = Field(default_factory=list)
     findings: List[Finding] = Field(default_factory=list)
     intelligence_indicators: Optional[IntelligenceIndicators] = None
     reporting_integrity_score: Optional[ReportingIntegrityScore] = None
