@@ -5,22 +5,39 @@ Audit engine ports one node from graph , ported from state.py. this is the real 
 
 """
 
-import json, uuid
+import json, uuid, os
 
 from pathlib import Path
 from types import SimpleNamespace
 from jinja2 import Environment, FileSystemLoader
 from datetime import datetime
+from pydantic import BaseModel
 
+from langchain.chat_models import init_chat_model
 from langgraph.graph import StateGraph, END
 from langgraph.types import interrupt, Command
 from langgraph.checkpoint.memory import MemorySaver
 
-from audit_engine.state import AuditState
+from audit_engine.state import (
+    AuditState, RegistryItem, CharterMetadata, MaterialityScope,
+    Waiver, FieldSemantic,IEMPMCanonicalState, RegistryList, DEFINE_PROMPT, CharterProposal
+)
+
 from audit_engine.tools.render_helpers import compute_origin_counts, compute_severity_counts
 from audit_engine.tools.scoring import compute_reporting_integrity_score
-from audit_engine.state import IEMPMCanonicalState
 from audit_engine.tools.skeleton_extraction import EXTRACTORS, fingerprint
+from audit_engine.tools.baseline_text import load_baseline_text
+from audit_engine.tools.charter_validate import validate_ratified_charter
+from audit_engine.tools.skeleton_brief import skeleton_brief
+
+from audit_engine.evals.jev_charter_judge import precheck_charter
+from audit_engine.evals.jev_define_judge import grade_registry_item
+from audit_engine.evals.eval_charter import precheck_charter
+from audit_engine.evals.eval_define import ensure_dataset, define_target, jev_define_evaluator
+
+from audit_engine.nodes.charter import propose_charter
+from audit_engine.nodes.define import propose_registry
+
 
 def baseline_node(state: AuditState) -> dict:
     # a stub - no real logic yet, just proves the wiring works
@@ -70,17 +87,42 @@ def baseline_node(state: AuditState) -> dict:
     }
 
 def charter_node(state: AuditState) -> dict:
-    # a stub
-    human_response = interrupt(
-        {"action": "ratify_charter", "proposed_artifacts": ["ART-001"]}
-    )
-    print (human_response)
-    return{}
+    brief = skeleton_brief()
+    if not brief.strip():
+        return {"validation_errors": ["BASELINE_EMPTY"]}
+
+    proposal, check = propose_charter(brief)
+
+    # Human ratification. Resume with Command(resume=<charter dict>).
+    # The human may edit any field; ratified_by / ratified_date / organization
+    # must be filled in for real - validate_ratified_charter enforces it.
+    human_response = interrupt({
+        "action": "ratify_charter",
+        "proposed_charter": proposal.model_dump(mode="json"),
+        "jev_precheck": check,
+    })
+    data = validate_ratified_charter(human_response)
+    ratified = CharterProposal.model_validate(data)
+    print(f"charter_node ran - charter {ratified.charter_metadata.charter_status}")
+    return {
+        "charter_metadata": ratified.charter_metadata,
+        "materiality_scope": ratified.materiality_scope,
+        "waivers": ratified.waivers,
+        "field_semantics_map": ratified.field_semantics_map,
+        "chartered_artifact_ids": ratified.proposed_artifact_ids,
+    }
 
 def define_node(state: AuditState) -> dict:
-    # its a stub
-    print("define node ran")
-    return {}
+    baseline_text = load_baseline_text()
+    if not baseline_text.strip():
+        return {"validation_errors": ["BASELINE_EMPTY"], "registry": []}
+    llm = init_chat_model(os.environ.get("KORVAI_MODEL", "ollama:llama3.1"))
+    structured = llm.with_structured_output(RegistryList)
+    result: RegistryList = structured.invoke(
+        DEFINE_PROMPT.format(baseline_text=baseline_text)
+    )
+    print(f"define_node ran - {len(result.items)} criteria derived")
+    return {"registry": result.items}
 
 def measure_node(state: AuditState) -> dict:
     # its a stub
