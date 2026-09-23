@@ -68,62 +68,6 @@ class IntelligenceDimension(str, Enum):
     DECISION_QUALITY = "Decision Quality"
     CONTINUOUS_IMPROVEMENT = "Continuous Improvement"
 
-class RegistryList(BaseModel):
-    items: list[RegistryItem]
-
-
-DEFINE_PROMPT = """You are deriving an audit registry from project management standards.
-Read the standards text. Extract every checkable criterion as one registry item.
-Rules:
-- criterion_id is stable and unique, e.g. RISK-001, SCH-004.
-- standard is the source document name. clause is the section reference.
-- paraphrase is ONE sentence. Never copy standard text verbatim.
-- expected_evidence must name a concrete PMO artifact (RAID log, schedule,
-  status report) and observable content - not a vague aspiration.
-- Skip anything you cannot check against evidence. Fewer, checkable items
-  beat a long, wishful list.
-
-STANDARDS:
-{baseline_text}"""
-
-class CharterProposal(BaseModel):
-    charter_metadata: CharterMetadata
-    materiality_scope: MaterialityScope
-    waivers: list[Waiver]
-    field_semantics_map: list[FieldSemantic]
-    proposed_artifact_ids: list[str]
-
-
-CHARTER_PROMPT = """You are drafting a PMO Data Charter - the input contract for an audit.
-You get skeleton structures extracted from the baseline standards: document names,
-headings, and spreadsheet columns. Draft the charter as JSON.
-
-Rules:
-- proposed_artifact_ids: one ART-xxx id per baseline document (ART-001, ART-002, ...).
-  Every id unique. Every baseline document gets one - no orphans.
-- charter_metadata.organization: write "TBD" unless a baseline document names the
-  organization. Never invent one.
-- charter_metadata.charter_version: "1.0". audit_scope: the delivery areas under
-  audit, e.g. ["Projects", "PMO"].
-- charter_metadata.ratified_by: "TBD". charter_metadata.ratified_date: "1970-01-01".
-  The human fills these at ratification - never invent a name or date.
-- charter_metadata.charter_status: "PROVISIONAL".
-- field_semantics_map: one entry per meaningful spreadsheet column or data field in
-  the skeletons. field_name is the exact column/heading text. type is one of
-  String, Date, Number, Enum, Boolean, Calculated. meaning is one plain sentence.
-  nullability is NOT NULL or NULLABLE. business_rule states the checkable rule.
-  standard_mapping names the standard and clause it came from. No invented fields -
-  every field must trace to the skeletons below.
-- materiality_scope: lookback_period like "12 months". Every threshold carries an
-  explicit unit: field_completeness_threshold_pct as a number 0-100,
-  max_artifact_age_days as a whole number of days, budget/schedule variance
-  thresholds as percents. Skip any threshold the skeletons don't support.
-- waivers: leave empty unless a skeleton clearly marks an artifact out of scope.
-  Never invent a waiver.
-
-SKELETONS:
-{skeleton_brief}"""
-
 # ==============================================================================
 # 2. CHARTER MODELS (Input Contract)
 # ==============================================================================
@@ -171,6 +115,14 @@ class RegistryItem(BaseModel):
     paraphrase: str
     expected_evidence: str
 
+class CharterProposal(BaseModel):
+    charter_metadata: CharterMetadata
+    materiality_scope: MaterialityScope
+    waivers: list[Waiver]
+    field_semantics_map: list[FieldSemantic]
+    proposed_artifact_ids: list[str]
+
+    
 # ==============================================================================
 # 3. CANONICAL FINDINGS MODELS (Output State)
 # ==============================================================================

@@ -28,3 +28,9 @@ except ValidationError as e:
     print("FAIL: schema mismatch found. This is useful - it shows exactly")
     print("where state.py and the real IEM-PM output diverge.\n")
     print(e)
+
+def test_findings_json_validates():
+    fixture_path = Path(__file__).parent / "fixtures" / "test_findings.json"
+    data = json.loads(fixture_path.read_text())
+    state = IEMPMCanonicalState.model_validate(data)  # raises if invalid
+    assert state.audit_id

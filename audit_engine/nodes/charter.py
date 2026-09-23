@@ -4,13 +4,13 @@ Judgment lives here. Deterministic work lives in tools/:
 skeleton extraction in tools/charter_brief.py, ratification checks in
 tools/charter_validate.py. CharterProposal itself lives in state.py.
 """
-import os
+
 from datetime import datetime
 
-from langchain.chat_models import init_chat_model
-
 from audit_engine.state import CharterProposal
+from audit_engine.config import get_model
 from audit_engine.evals.jev_charter_judge import precheck_charter
+
 
 CHARTER_PROMPT = """You are drafting a PMO Data Charter - the input contract for an audit.
 You get skeleton structures extracted from the baseline standards: document names,
@@ -44,12 +44,7 @@ SKELETONS:
 
 
 def propose_charter(brief: str) -> tuple[CharterProposal, dict]:
-    """LLM drafts the charter, Jev pre-checks it, redraft once if it fails.
-
-    This is the pre-human half of the charter node - the part the LangSmith
-    eval can run unattended. The human ratification half stays in charter_node.
-    """
-    llm = init_chat_model(os.environ.get("KORVAI_MODEL", "ollama:llama3.1"))
+    llm = get_model()
     structured = llm.with_structured_output(CharterProposal)
     proposal, check = None, {}
     for attempt in range(2):
@@ -59,4 +54,6 @@ def propose_charter(brief: str) -> tuple[CharterProposal, dict]:
         if all(check[k] >= 0.7 for k in ("coverage", "grounded_fields", "units")):
             break
         print(f"charter pre-check failed on attempt {attempt + 1} - redrafting")
+    else:
+        check["failed_after_retries"] = True
     return proposal, check

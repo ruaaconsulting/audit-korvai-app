@@ -5,35 +5,25 @@ Audit engine ports one node from graph , ported from state.py. this is the real 
 
 """
 
-import json, uuid, os
+import json, uuid
 
 from pathlib import Path
 from types import SimpleNamespace
 from jinja2 import Environment, FileSystemLoader
 from datetime import datetime
-from pydantic import BaseModel
 
-from langchain.chat_models import init_chat_model
 from langgraph.graph import StateGraph, END
 from langgraph.types import interrupt, Command
 from langgraph.checkpoint.memory import MemorySaver
 
-from audit_engine.state import (
-    AuditState, RegistryItem, CharterMetadata, MaterialityScope,
-    Waiver, FieldSemantic,IEMPMCanonicalState, RegistryList, DEFINE_PROMPT, CharterProposal
-)
+from audit_engine.state import AuditState, CharterProposal, IEMPMCanonicalState
 
 from audit_engine.tools.render_helpers import compute_origin_counts, compute_severity_counts
 from audit_engine.tools.scoring import compute_reporting_integrity_score
 from audit_engine.tools.skeleton_extraction import EXTRACTORS, fingerprint
 from audit_engine.tools.baseline_text import load_baseline_text
 from audit_engine.tools.charter_validate import validate_ratified_charter
-from audit_engine.tools.skeleton_brief import skeleton_brief
-
-from audit_engine.evals.jev_charter_judge import precheck_charter
-from audit_engine.evals.jev_define_judge import grade_registry_item
-from audit_engine.evals.eval_charter import precheck_charter
-from audit_engine.evals.eval_define import ensure_dataset, define_target, jev_define_evaluator
+from audit_engine.tools.charter_brief import skeleton_brief
 
 from audit_engine.nodes.charter import propose_charter
 from audit_engine.nodes.define import propose_registry
@@ -116,13 +106,9 @@ def define_node(state: AuditState) -> dict:
     baseline_text = load_baseline_text()
     if not baseline_text.strip():
         return {"validation_errors": ["BASELINE_EMPTY"], "registry": []}
-    llm = init_chat_model(os.environ.get("KORVAI_MODEL", "ollama:llama3.1"))
-    structured = llm.with_structured_output(RegistryList)
-    result: RegistryList = structured.invoke(
-        DEFINE_PROMPT.format(baseline_text=baseline_text)
-    )
-    print(f"define_node ran - {len(result.items)} criteria derived")
-    return {"registry": result.items}
+    items = propose_registry(baseline_text)
+    print(f"define_node ran - {len(items)} criteria derived")
+    return {"registry": items}
 
 def measure_node(state: AuditState) -> dict:
     # its a stub

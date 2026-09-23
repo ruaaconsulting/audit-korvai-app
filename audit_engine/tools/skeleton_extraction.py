@@ -5,6 +5,16 @@ from docx import Document
 from openpyxl import load_workbook
 from pathlib import Path
 
+
+def _flatten_outline(outline) -> list[str]:
+    titles = []
+    for item in outline:
+        if isinstance(item, list):
+            titles.extend(_flatten_outline(item))   # this is a nested branch - recurse into it
+        elif hasattr(item, "title"):
+            titles.append(item.title)
+    return titles
+
 def fingerprint(file_path: Path) -> str:
     return hashlib.sha256(file_path.read_bytes()).hexdigest()
 
@@ -15,7 +25,7 @@ def extract_skeleton_md(file_path: Path) -> dict:
 
 def extract_skeleton_pdf(file_path: Path) -> dict:
     reader = PdfReader(file_path)
-    headings = [item.title for item in reader.outline if hasattr(item, "title")]
+    headings = _flatten_outline(reader.outline)
     if not headings:
         print(f"Warning: {file_path.name} has no bookmarks - skeleton will be empty")
     return {"document_id": file_path.stem, "structure": headings}

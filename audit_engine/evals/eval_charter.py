@@ -13,7 +13,8 @@ Run: uv run python -m audit_engine.evals.eval_charter
 """
 from langsmith import Client
 
-from audit_engine.graph import propose_charter, skeleton_brief
+from audit_engine.nodes.charter import propose_charter
+from audit_engine.tools.charter_brief import skeleton_brief
 
 client = Client()  # reads LANGSMITH_API_KEY
 DATASET = "korvai-charter-proposal-v1"
