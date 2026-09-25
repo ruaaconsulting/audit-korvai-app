@@ -6,9 +6,9 @@ tools/baseline_text.py. RegistryItem itself lives in state.py.
 import os
 
 from pydantic import BaseModel
-from langchain.chat_models import init_chat_model
 
 from audit_engine.state import RegistryItem
+from audit_engine.config import get_model
 
 
 class RegistryList(BaseModel):
@@ -32,7 +32,7 @@ STANDARDS:
 
 def propose_registry(baseline_text: str) -> list[RegistryItem]:
     """LLM derives the criteria registry from the baseline text."""
-    llm = init_chat_model(os.environ.get("KORVAI_MODEL", "ollama:llama3.1"))
+    llm = get_model()
     structured = llm.with_structured_output(RegistryList)
     result: RegistryList = structured.invoke(
         DEFINE_PROMPT.format(baseline_text=baseline_text)

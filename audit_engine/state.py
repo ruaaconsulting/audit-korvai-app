@@ -49,6 +49,15 @@ class GapType(str, Enum):
     UNDERUTILIZED = "Underutilized"
     MISCLASSIFIED = "Misclassified"
     DIVERGENT = "Divergent"
+    GAP_TYPE_DEFINITIONS = {
+        "Missing": "The required artifact, data, or practice does not exist at all.",
+        "Ignored": "It exists but is not used or followed in practice.",
+        "Disconnected": "It exists but is not linked to the things that depend on it.",
+        "Untrusted": "It exists but its accuracy or currency cannot be relied upon.",
+        "Underutilized": "It exists and is trusted but its capability is not fully exploited.",
+        "Misclassified": "It exists but is categorized or labeled in a way that misleads.",
+        "Divergent": "Multiple versions or understandings exist and they disagree.",
+    }
 
 class RootOrigin(str, Enum):
     CAPTURE = "Capture"
@@ -115,6 +124,61 @@ class RegistryItem(BaseModel):
     paraphrase: str
     expected_evidence: str
 
+class EvidenceRecord(BaseModel):
+    criterion_id: str
+    source_document: str
+    location: str            # e.g. "Section 11.2" or "NOT_FOUND"
+    excerpt: str             # verbatim quote; "" when NOT_FOUND
+    status: str              # "FOUND" or "NOT_FOUND"
+    criterion_paraphrase: str = ""  # backfilled deterministically from the registry
+    fingerprint: str = ""    # sha256 of the excerpt, set by tools/evidence_store.py
+
+class GapVerdict(BaseModel):
+    criterion_id: str
+    verdict: str  # "SATISFIED" or "GAP"
+    gap_type: Optional[GapType] = None
+    gap_confidence: float = 0.0      # P(this is a gap)
+    type_confidence: float = 0.0     # P(chosen gap type)
+    root_origin: Optional[RootOrigin] = None
+    root_confidence: float = 0.0     # P(chosen root origin)
+    considered_alternative: str = ""  # runner-up type + P; trace's lead
+    needs_human_review: bool = False
+    review_reason: str = ""
+    criterion_paraphrase: str = ""  # copied from the evidence record
+    evidence_excerpt: str = ""      # copied from the evidence record
+
+class ScoredGap(BaseModel):
+    finding_id: str = Field(..., pattern=r"^FIND-[0-9]{4}$")
+    criterion_id: str
+    gap_type: GapType
+    accountable_root_origin: Optional[RootOrigin] = None
+    severity: int = Field(..., ge=1, le=5)
+    severity_parts: dict = Field(default_factory=dict)  # evidence/impact/scope/fix_at_source, each 1-5
+    severity_rationale: str = ""
+    requires_approval: bool = False  # True when severity >= 4
+    gap_confidence: float = 0.0
+    type_confidence: float = 0.0
+    root_confidence: float = 0.0
+    contributing_factors: List[str] = Field(default_factory=list)
+    trace_chain: List[TraceLink] = Field(default_factory=list)
+    needs_human_review: bool = False
+    review_reason: str = ""
+class TraceLink(BaseModel):
+    level: str  # "criterion" | "evidence" | "standard"
+    ref: str
+    detail: str = ""
+class TracedGap(BaseModel):
+    finding_id: str = Field(..., pattern=r"^FIND-[0-9]{4}$")
+    criterion_id: str
+    gap_type: GapType  # carried through unchanged from the verdict
+    accountable_root_origin: Optional[RootOrigin] = None  # exactly one when present
+    gap_confidence: float = 0.0
+    type_confidence: float = 0.0
+    root_confidence: float = 0.0
+    contributing_factors: List[str] = Field(default_factory=list)
+    trace_chain: List[TraceLink] = Field(default_factory=list)
+    needs_human_review: bool = False
+    review_reason: str = ""
 class CharterProposal(BaseModel):
     charter_metadata: CharterMetadata
     materiality_scope: MaterialityScope
@@ -355,8 +419,22 @@ class AuditState(BaseModel):
 
     # --- Filled by classify / trace / score / synthesize nodes ---
     registry: List[RegistryItem] = Field(default_factory=list)
+    evidence: List[EvidenceRecord] = Field(default_factory=list)
+    measure_precheck: dict = Field(default_factory=dict)
+    gap_verdicts: List[GapVerdict] = Field(default_factory=list)
+    classify_precheck: dict = Field(default_factory=dict)
     chartered_artifact_ids: List[str] = Field(default_factory=list)
+    charter_proposal: dict = Field(default_factory=dict)
+    charter_precheck: dict = Field(default_factory=dict)
     findings: List[Finding] = Field(default_factory=list)
+    gap_verdicts: List[GapVerdict] = Field(default_factory=list)
+    traced_gaps: List[TracedGap] = Field(default_factory=list)
+    trace_precheck: dict = Field(default_factory=dict)
+    scored_gaps: List[ScoredGap] = Field(default_factory=list)
+    score_precheck: dict = Field(default_factory=dict)
+    manifest_path: str = ""
+    synthesize_precheck: dict = Field(default_factory=dict)
+    classify_precheck: dict = Field(default_factory=dict)
     intelligence_indicators: Optional[IntelligenceIndicators] = None
     reporting_integrity_score: Optional[ReportingIntegrityScore] = None
 

@@ -5,7 +5,7 @@ Audit engine ports one node from graph , ported from state.py. this is the real 
 
 """
 
-import json, uuid
+import json, uuid, time
 
 from pathlib import Path
 from types import SimpleNamespace
@@ -24,9 +24,17 @@ from audit_engine.tools.skeleton_extraction import EXTRACTORS, fingerprint
 from audit_engine.tools.baseline_text import load_baseline_text
 from audit_engine.tools.charter_validate import validate_ratified_charter
 from audit_engine.tools.charter_brief import skeleton_brief
+from audit_engine.tools.evidence_store import store_evidence
+from audit_engine.tools.canonical import canonical_updates
 
 from audit_engine.nodes.charter import propose_charter
 from audit_engine.nodes.define import propose_registry
+from audit_engine.nodes.measure import propose_evidence
+from audit_engine.nodes.classify import classify_evidence, default_backend
+from audit_engine.nodes.trace import build_traces
+from audit_engine.nodes.score import score_gaps
+from audit_engine.nodes.synthesize import build_findings, write_manifest, _dump
+
 
 
 def baseline_node(state: AuditState) -> dict:
@@ -76,24 +84,30 @@ def baseline_node(state: AuditState) -> dict:
         "baseline_standards": [s["document_id"] for s in skeletons]
     }
 
-def charter_node(state: AuditState) -> dict:
+def propose_charter_node(state: AuditState) -> dict:
     brief = skeleton_brief()
     if not brief.strip():
         return {"validation_errors": ["BASELINE_EMPTY"]}
-
     proposal, check = propose_charter(brief)
+    print("propose_charter_node ran - proposal ready for ratification")
+    return {"charter_proposal": proposal.model_dump(mode="json"),
+            "charter_precheck": check}
 
+
+def ratify_charter_node(state: AuditState) -> dict:
+    proposal = getattr(state, "charter_proposal", None) or {}
+    check = getattr(state, "charter_precheck", None) or {}
     # Human ratification. Resume with Command(resume=<charter dict>).
     # The human may edit any field; ratified_by / ratified_date / organization
     # must be filled in for real - validate_ratified_charter enforces it.
     human_response = interrupt({
         "action": "ratify_charter",
-        "proposed_charter": proposal.model_dump(mode="json"),
+        "proposed_charter": proposal,
         "jev_precheck": check,
     })
     data = validate_ratified_charter(human_response)
     ratified = CharterProposal.model_validate(data)
-    print(f"charter_node ran - charter {ratified.charter_metadata.charter_status}")
+    print(f"ratify_charter_node ran - charter {ratified.charter_metadata.charter_status}")
     return {
         "charter_metadata": ratified.charter_metadata,
         "materiality_scope": ratified.materiality_scope,
@@ -111,33 +125,82 @@ def define_node(state: AuditState) -> dict:
     return {"registry": items}
 
 def measure_node(state: AuditState) -> dict:
-    # its a stub
-    print("Measure node ran - The Purpose of this node is Evaluate every applicable registry criterion against the delivery evidence; each failure becomes a gap.")
-    return {}
+    baseline_text = load_baseline_text()
+    registry = getattr(state, "registry", None) or []
+    if not registry:
+        return {"validation_errors": ["REGISTRY_EMPTY"], "evidence": []}
+    records, check = propose_evidence(baseline_text, registry)
+    stored = store_evidence(records)
+    print(f"measure_node ran - {len(stored)} evidence records stored "
+          f"({check.get('found_rate', 0):.0%} with evidence)")
+    return {"evidence": stored, "measure_precheck": check}
 
 def classify_node(state: AuditState) -> dict:
-    # its a stub
-    print("classify node ran - The Purpose of this node is Assign each gap exactly one of the 7 gap types (§7). No overlap, no duplicates.")
-    return {}
+    evidence = getattr(state, "evidence", None) or []
+    if not evidence:
+        print("classify_node skipped - no evidence records to classify")
+        return {"validation_errors": ["EVIDENCE_EMPTY"], "gap_verdicts": []}
+    backend = default_backend()  # CLASSIFY_BACKEND env var, "jev" if unset
+    verdicts, check = classify_evidence(evidence, backend=backend)
+    gaps = sum(1 for v in verdicts if v.verdict == "GAP")
+    print(f"classify_node ran [{backend}] - {len(verdicts)} records, "
+          f"{gaps} gaps, {len(check['needs_review'])} flagged for review")
+    return {"gap_verdicts": verdicts, "classify_precheck": check}
 
 def trace_node(state: AuditState) -> dict:
-    # its a stub
-    print("trace node ran - The Purpose of this node is Trace each gap to exactly one of the 7 root origins (§8) — the earliest point the gap entered the system.")
-    return {}
+    verdicts = getattr(state, "gap_verdicts", None) or []
+    evidence = getattr(state, "evidence", None) or []
+    registry = getattr(state, "registry", None) or []
+    traced, check = build_traces(verdicts, evidence, registry)
+    print(f"trace_node ran - {len(traced)} gaps traced, "
+          f"{len(check['needs_review'])} flagged for review")
+    return {"traced_gaps": traced, "trace_precheck": check}
 
 def score_node(state: AuditState) -> dict:
-    # its a stub
-    print("score node ran - The Purpose of this node is for every finding and assign its severity, using the four-part diagnostic (Evidence · Impact · Why/Who/Scope · Fix-at-source) ")
-    return {}
+    traced = getattr(state, "traced_gaps", None) or []
+    evidence = getattr(state, "evidence", None) or []
+    scored, check = score_gaps(traced, evidence)
+    approvals = sum(1 for s in scored if s.requires_approval)
+    print(f"score_node ran - {len(scored)} findings scored, "
+          f"{approvals} need approval")
+    return {"scored_gaps": scored, "score_precheck": check}
 
-def synthesize_node(state: AuditState) -> dict:
-    # its a stub
-    print("synthesize node ran - The Purpose of this node is Write the complete Audit Manifest to disk (§10) — the compaction-survival gate. Everything after this is deterministic. ")
-    return {}
+def synthesize_node(state: AuditState, manifest_dir: str = "manifests") -> dict:
+    scored = getattr(state, "scored_gaps", None) or []
+    evidence = getattr(state, "evidence", None) or []
+    criteria = getattr(state, "criteria", None) or []
+    charter = getattr(state, "charter", None)
+    findings = build_findings(scored, evidence, criteria)
+    manifest = {
+        "audit_id": f"audit-{int(time.time())}",
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "charter": _dump(charter),
+        "criteria": _dump(criteria),
+        "evidence": _dump(evidence),
+        "gap_verdicts": _dump(getattr(state, "gap_verdicts", None) or []),
+        "traced_gaps": _dump(getattr(state, "traced_gaps", None) or []),
+        "scored_gaps": _dump(scored),
+        "findings": findings,
+        "prechecks": {
+            "measure": getattr(state, "measure_precheck", None) or {},
+            "classify": getattr(state, "classify_precheck", None) or {},
+            "trace": getattr(state, "trace_precheck", None) or {},
+            "score": getattr(state, "score_precheck", None) or {},
+        },
+    }
+    path = write_manifest(manifest, directory=manifest_dir)
+    check = {"findings": len(findings), "manifest_path": path,
+             "model": "deterministic"}
+    print(f"synthesize_node ran - {len(findings)} findings, manifest -> {path}")
+    return {"findings": findings, "manifest_path": path,
+            "synthesize_precheck": check}
 
 def findings_node(state: AuditState) -> dict:
-    # its a stub
 
+    # NEW: fill the six deterministic canonical fields before validating
+    _updates = canonical_updates(state)
+    for _key, _value in _updates.items():
+        setattr(state, _key, _value)
     canonical = state.to_canonical()
     score = compute_reporting_integrity_score(canonical.findings,canonical.artifacts_examined)
     canonical_with_score = canonical.model_copy(update={"reporting_integrity_score":score})
@@ -200,7 +263,8 @@ def summarise_node(state: AuditState) -> dict:
 graph = StateGraph(AuditState)
 
 graph.add_node("baseline", baseline_node)
-graph.add_node("charter", charter_node)
+graph.add_node("propose_charter", propose_charter_node)
+graph.add_node("ratify_charter", ratify_charter_node)
 graph.add_node("define", define_node)
 graph.add_node("measure", measure_node)
 graph.add_node("classify", classify_node)
@@ -213,8 +277,9 @@ graph.add_node("summarise", summarise_node)
 
 graph.set_entry_point("baseline")
 
-graph.add_edge("baseline", "charter")     
-graph.add_edge("charter","define" )
+graph.add_edge("baseline", "propose_charter")
+graph.add_edge("propose_charter", "ratify_charter")
+graph.add_edge("ratify_charter", "define")    
 graph.add_edge("define","measure" )
 graph.add_edge("measure","classify" )
 graph.add_edge("classify","trace" )

@@ -15,3 +15,10 @@ registries/
 audit_engine/output/
 
 docs/
+
+# Runtime/scratch artifacts from interactive and test runs
+charter_proposal.json
+manifests/
+*.log
+finding_parts.txt
+findings_model.txt
