@@ -49,15 +49,7 @@ class GapType(str, Enum):
     UNDERUTILIZED = "Underutilized"
     MISCLASSIFIED = "Misclassified"
     DIVERGENT = "Divergent"
-    GAP_TYPE_DEFINITIONS = {
-        "Missing": "The required artifact, data, or practice does not exist at all.",
-        "Ignored": "It exists but is not used or followed in practice.",
-        "Disconnected": "It exists but is not linked to the things that depend on it.",
-        "Untrusted": "It exists but its accuracy or currency cannot be relied upon.",
-        "Underutilized": "It exists and is trusted but its capability is not fully exploited.",
-        "Misclassified": "It exists but is categorized or labeled in a way that misleads.",
-        "Divergent": "Multiple versions or understandings exist and they disagree.",
-    }
+
 
 class RootOrigin(str, Enum):
     CAPTURE = "Capture"
